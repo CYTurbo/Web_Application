@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "build:single": "vite build -c vite.single.config.ts && node scripts/single-file.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

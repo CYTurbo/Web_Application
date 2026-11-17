@@ -10,6 +10,9 @@ import { sampleData } from './lib/sample'
 import { loadData, saveData } from './lib/storage'
 import { emptyData, type AppData } from './lib/types'
 
+// The hosted-preview build runs in a sandbox that blocks outside requests, so live quotes are unavailable there.
+const CAN_FETCH = !import.meta.env.VITE_NO_NETWORK
+
 type Tab = 'overview' | 'performers' | 'earnings' | 'holdings' | 'trades'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -32,6 +35,7 @@ export default function App() {
   const [hiddenWarnings, setHiddenWarnings] = useState<string[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const nextId = useRef(1)
 
@@ -155,7 +159,10 @@ export default function App() {
       {dragging && <div className="dragging-overlay">Drop holdings or tradebook files to import</div>}
       <header className="header">
         <div className="brand">
-          <img src="./favicon.svg" alt="" />
+          <svg viewBox="0 0 32 32" aria-hidden>
+            <rect width="32" height="32" rx="7" fill="var(--accent)" />
+            <path d="M7 22l6-7 4 4 8-10" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           <h1>
             Portfolio Lens
             <small>Your demat portfolio, in detail</small>
@@ -163,24 +170,28 @@ export default function App() {
         </div>
         {hasData && (
           <div className="actions">
-            <button type="button" className="btn primary" onClick={refreshPrices} disabled={!!busy}>
-              {busy ?? 'Refresh prices'}
-            </button>
-            <button type="button" className="btn" onClick={() => fileInput.current?.click()} disabled={!!busy}>
+            {CAN_FETCH && (
+              <button type="button" className="btn primary" onClick={refreshPrices} disabled={!!busy}>
+                {busy ?? 'Refresh prices'}
+              </button>
+            )}
+            <button type="button" className={CAN_FETCH ? 'btn' : 'btn primary'} onClick={() => fileInput.current?.click()} disabled={!!busy}>
               Add files
             </button>
             <button
               type="button"
               className="btn danger"
+              onBlur={() => setConfirmClear(false)}
               onClick={() => {
-                if (window.confirm('Remove all imported portfolio data from this browser?')) {
-                  setData(emptyData)
-                  setMessages([])
-                  setTab('overview')
-                }
+                // Two clicks instead of a browser dialog, which embedded viewers suppress.
+                if (!confirmClear) return setConfirmClear(true)
+                setConfirmClear(false)
+                setData(emptyData)
+                setMessages([])
+                setTab('overview')
               }}
             >
-              Clear data
+              {confirmClear ? 'Tap again to remove all data' : 'Clear data'}
             </button>
           </div>
         )}
@@ -210,7 +221,7 @@ export default function App() {
           {portfolio.stalePrices > 0 && (
             <div className="notice info">
               <span>
-                {portfolio.stalePrices} holding{portfolio.stalePrices === 1 ? ' is' : 's are'} valued at the last traded or cost price because no current price is available. Use “Refresh prices”, import a holdings file, or set prices by hand in the Holdings tab.
+                {portfolio.stalePrices} holding{portfolio.stalePrices === 1 ? ' is' : 's are'} valued at the last traded or cost price because no current price is available. {CAN_FETCH ? 'Use “Refresh prices”, import' : 'Import'} a holdings file, or tap a price in the Holdings tab to set it by hand.
               </span>
             </div>
           )}
@@ -271,7 +282,7 @@ function Landing({ busy, onPick, onSample }: { busy: string | null; onPick: () =
           </ol>
         </div>
       </div>
-      <p className="privacy">Your files are read in this browser and stored only on this device. Nothing is uploaded. Refreshing prices sends only ticker symbols to a public quote service.</p>
+      <p className="privacy">Your files are read in this browser and stored only on this device. Nothing is uploaded.{CAN_FETCH && ' Refreshing prices sends only ticker symbols to a public quote service.'}</p>
     </div>
   )
 }
